@@ -3,7 +3,7 @@ CC = gcc
 PRGNAME = crawlspace
 IDIR = include 
 BUILDDIR = build
-TESTDIR = src/tests
+TESTDIR = src/test
 
 LIBRARY_SRC = 
 SOURCE_DIRS = $(LIBRARY_SRC) src src/crsp

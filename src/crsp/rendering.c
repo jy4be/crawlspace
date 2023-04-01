@@ -2,6 +2,8 @@
 
 #define sign(x) (x) < 0 ? -1 : 1
 
+double CRSP_z_buffer[MAX_WIDTH] = {0};
+
 void render_map() {
     i32 w = CRSP_window_data.width;
     i32 h = CRSP_window_data.height;
@@ -12,7 +14,7 @@ void render_map() {
     //Wall casting
     for (int16_t column = 0; column < w; column++) {
         //Normalise column to values between -1 to 1
-        double camera_x = 2 * column / (double) (w) - (double) 1; 
+        f64 camera_x = 2 * column / (f64)(w) - (f64) 1; 
         
         //The direction the ray will travel
         v2f_t ray_dir = {
@@ -21,8 +23,8 @@ void render_map() {
 
         //The players position in grid coordinates
         v2i_t grid_pos = {
-            .x = (int) pos.x,
-            .y = (int) pos.y};
+            .x = (i32) pos.x,
+            .y = (i32) pos.y};
 
         //The distance from one x or y-side to the next in the rays direction
         v2f_t delta_dist = {
@@ -62,20 +64,20 @@ void render_map() {
                 side = VERTICAL;
             }
 
-            if(CRSP_map.tiles[grid_pos.x][grid_pos.y].wall_id > 0)
+            if(CRSP_map.tiles[grid_pos.x * CRSP_map.width + grid_pos.y].wall_id > 0)
                 hit = true;
         }
 
-        double perp_wall_dist =
+        f64 perp_wall_dist =
             (side == HORIZONTAL) ?
                 (side_dist.x - delta_dist.x):
                 (side_dist.y - delta_dist.y);
 
-        z_buffer[column] = perp_wall_dist;
+        CRSP_z_buffer[column] = perp_wall_dist;
 
-        int32_t line_height = (int) (h / perp_wall_dist);
+        i32 line_height = (i32) (h / perp_wall_dist);
 
-        int32_t line_top, line_bottom;
+        i32 line_top, line_bottom;
         if(perp_wall_dist <= 1) {
             line_top    = 0;
             line_bottom = h -1;
@@ -85,44 +87,45 @@ void render_map() {
             line_bottom =  line_height/2 + h/2;
         }
 
-        uint8_t tex_index = CRSP_map.tiles[grid_pos.x][grid_pos.y].wall_id -1;
+        u8 tex_index = CRSP_map.tiles[grid_pos.x * CRSP_map.width + grid_pos.y].wall_id -1;
 
-        double wall_x = 
+        f64 wall_x = 
             (side == HORIZONTAL) ?
                 pos.y + perp_wall_dist * ray_dir.y : //Horizontal wall
                 pos.x + perp_wall_dist * ray_dir.x;  //Vertical wall
         wall_x -= floor(wall_x);
 
-        int tex_x = (int) (wall_x * (double)tex_size);
+        i32 tex_x = (i32) (wall_x * (f64)tex_size);
 
         //Texture Wrap-around
         if(side == HORIZONTAL && ray_dir.x > 0) tex_x = tex_size - tex_x -1;
         if(side == VERTICAL   && ray_dir.y < 0) tex_x = tex_size - tex_x -1;
 
-        double tex_step = 1.0 * tex_size / line_height;
-        double tex_pos = (line_top - h/ 2 + line_height / 2) * tex_step;
+        f64 tex_step = 1.0 * tex_size / line_height;
+        f64 tex_pos = (line_top - h/ 2 + line_height / 2) * tex_step;
 
         //Draw vertical Line
-        for (int32_t h = line_top; h < line_bottom; h++) {
-            int tex_y = (int) tex_pos & (tex_size-1);
+        for (i32 y = line_top; y < line_bottom; y++) {
+            i32 tex_y = (i32) tex_pos & (tex_size-1);
             tex_pos += tex_step;
 
-            pixel_t color = get_texture(tex_index)[tex_y][tex_x];
+            
+            pixel_t color = get_texture(tex_index)[tex_y * CRSP_texture_size + tex_x];
             if(side == VERTICAL) {
                 color.r /= 2;
                 color.g /= 2;
                 color.b /= 2;
             }  
-            CRSP_screen.pixels[h * w + column] = color;
+            CRSP_screen.pixels[y * w + column] = color;
         }
 
         //Floor and Ceiling
 
         v2f_t floor_ray = {
-            .x = (double)(2*column) / (double)w -1};
+            .x = (f64)(2*column) / (f64)w -1};
 
-        for (int32_t h = 0; h < (w - line_height)/2; h++){
-            floor_ray.y = ((double)w/2) / ((double)w/2 - (line_bottom + h));
+        for (int32_t y = 0; y < (h - line_height)/2; y++){
+            floor_ray.y = ((f64)h/2) / ((f64)h/2 - (line_bottom + y));
 
             v2f_t floor_coord = {
                 .x = pos.x - floor_ray.y * (dir.x + plane.x * floor_ray.x),
@@ -132,58 +135,56 @@ void render_map() {
                 .x = tex_size * (floor_coord.x - floor(floor_coord.x)),
                 .y = tex_size * (floor_coord.y - floor(floor_coord.y))};
 
-            pixel_t color = get_texture(3)[tex_coord.y][tex_coord.x];
-            CRSP_screen.pixels[(h + line_bottom) * w + column] = color; //floor
-            CRSP_screen.pixels[(line_top - h) * w + column] = color;    //ceiling
+            pixel_t color = get_texture(3)[tex_coord.y * CRSP_texture_size + tex_coord.x];
+            CRSP_screen.pixels[(y + line_bottom) * w + column] = color; //floor
+            CRSP_screen.pixels[(line_top - y) * w + column] = color;    //ceiling
         }
     }
 
-
     //SPRITE CAST
-    for (uint32_t i = 0; i < NUM_SPRITES; i++) {
-        sprite_order[i] = i;
-        sprite_dist[i] = ((player.pos.x - sprites[i].pos.x) * (player.pos.x - sprites[i].pos.x) +
-                          (player.pos.y - sprites[i].pos.y) * (player.pos.y - sprites[i].pos.y));
+    for (u32 i = 0; i < CRSP_sprites_amount; i++) {
+        if(!CRSP_sprites[i]) continue;
+        CRSP_sprites[i]->dist = ((pos.x - CRSP_sprites[i]->pos.x) * (pos.x - CRSP_sprites[i]->pos.x) +
+                          (pos.y - CRSP_sprites[i]->pos.y) * (pos.y - CRSP_sprites[i]->pos.y));
     }
-    sort_sprites(sprite_order, sprite_dist, NUM_SPRITES);
+    sort_sprites(CRSP_sprites, CRSP_sprites_amount);
 
     //Project and draw Sprites
-    for(uint32_t i = 0; i < NUM_SPRITES; i++) {
+    for(u32 i = 0; i < CRSP_sprites_amount; i++) {
+        if(!CRSP_sprites[i]) continue;
         v2f_t rel_sprite = {
-            .x = sprites[sprite_order[i]].pos.x - pos.x,
-            .y = sprites[sprite_order[i]].pos.y - pos.y};
+            .x = CRSP_sprites[i]->pos.x - pos.x,
+            .y = CRSP_sprites[i]->pos.y - pos.y};
         
-        double inv_det = 1.0 / (plane.x * dir.y - 
+        f64 inv_det = 1.0 / (plane.x * dir.y - 
                                 dir.x * plane.y);
 
         v2f_t trans_pos = {
             .x = inv_det * (dir.y * rel_sprite.x - dir.x * rel_sprite.y),
             .y = inv_det * (-plane.y * rel_sprite.x + plane.x * rel_sprite.y)};
 
-        int32_t sprite_screen_x = (int) ((w/2) * (1 + trans_pos.x / trans_pos.y));
+        i32 sprite_screen_x = (i32) ((w/2) * (1 + trans_pos.x / trans_pos.y));
 
-        int32_t sprite_height   = abs((int)(h / trans_pos.y));
-        int32_t draw_start_y = -sprite_height / 2 + h / 2;
+        i32 sprite_height   = abs((i32)(h / trans_pos.y));
+        i32 draw_start_y = -sprite_height / 2 + h / 2;
         if(draw_start_y < 0) draw_start_y = 0;
-        int32_t draw_end_y = sprite_height / 2 + h / 2;
+        i32 draw_end_y = sprite_height / 2 + h / 2;
         if(draw_end_y >= h) draw_end_y = h - 1;
 
-        int32_t sprite_width = abs((int) (h / trans_pos.y));
-        int32_t draw_start_x = -sprite_width / 2 + sprite_screen_x;
+        i32 sprite_width = abs((i32) (h / trans_pos.y));
+        i32 draw_start_x = -sprite_width / 2 + sprite_screen_x;
         if(draw_start_x < 0) draw_start_x = 0;
-        int32_t draw_end_x = sprite_width / 2 + sprite_screen_x;
+        i32 draw_end_x = sprite_width / 2 + sprite_screen_x;
         if(draw_end_x >= w) draw_end_x = w - 1;
 
-        for (int32_t column = draw_start_x; column < draw_end_x; column++) {
-            int tex_x = (int) (256 * (column - (-sprite_width / 2 + sprite_screen_x)) * 
+        for (i32 column = draw_start_x; column < draw_end_x; column++) {
+            i32 tex_x = (i32) (256 * (column - (-sprite_width / 2 + sprite_screen_x)) * 
                                 tex_size / sprite_width) / 256;
-
-            if(trans_pos.y > 0 && column > 0 && column < w && trans_pos.y < z_buffer[column]) {
-                for(int32_t y = draw_start_y; y < draw_end_y; y++) {
-                    int32_t d = (y) * 256 - h * 128 + sprite_height * 128;
-                    int32_t tex_y = ((d * tex_size) / sprite_height) / 256;
-                    pixel_t color = 
-                        get_texture(sprites[sprite_order[i]].tex_index)[tex_y][tex_x];
+            if(trans_pos.y > 0 && column > 0 && column < w && trans_pos.y < CRSP_z_buffer[column]) {
+                for(i32 y = draw_start_y; y < draw_end_y; y++) {
+                    i32 d = (y) * 256 - h * 128 + sprite_height * 128;
+                    i32 tex_y = ((d * tex_size) / sprite_height) / 256;
+                    pixel_t color = get_texture(CRSP_sprites[i]->tex_id)[tex_y * CRSP_texture_size + tex_x];
                     if(!(color.r == 0 && color.g == 0 && color.b == 0))
                         CRSP_screen.pixels[y * w + column] = //color;
                             (pixel_t) {

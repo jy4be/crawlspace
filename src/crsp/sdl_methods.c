@@ -1,5 +1,8 @@
 #include "crsp.h"
 
+window_data_t CRSP_window_data;
+
+screen_t CRSP_screen;
 void screen(u32 width, u32 height, char* name) {
     CRSP_window_data.width = width;
     CRSP_window_data.height = height;
@@ -42,8 +45,25 @@ void screen(u32 width, u32 height, char* name) {
     CRSP_window_data.is_running = true;
 }
 
+void present() {
+    SDL_UpdateTexture(CRSP_window_data.texture, NULL, &CRSP_screen.bytes, CRSP_window_data.width * 3);
+        SDL_RenderCopyEx(
+            CRSP_window_data.renderer,
+            CRSP_window_data.texture,
+            NULL,
+            NULL,
+            0.0,
+            NULL,
+            0);
+        SDL_RenderPresent(CRSP_window_data.renderer);
+
+        SDL_Delay(16);
+}
+
+
 void cleanup() {
     SDL_DestroyTexture(CRSP_window_data.texture);
     SDL_DestroyRenderer(CRSP_window_data.renderer);
     SDL_DestroyWindow(CRSP_window_data.window);
+    destroy_textures();
 }

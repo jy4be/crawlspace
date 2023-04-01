@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <SDL2/SDL.h>
+#include <stdbool.h>
 
 #define MAX_WIDTH  (320 * 4)
 #define MAX_HEIGHT (180 * 4) 
@@ -10,7 +11,7 @@
 
 #define WINDOW_FLAGS 0
 #define RENDER_FLAGS SDL_RENDERER_ACCELERATED
-#define DYN_ASSERT(asserted, ...) if(!asserted) {fprintf(stderr, __VA_ARGS__); exit(-1);}
+#define DYN_ASSERT(asserted, ...) if(!(asserted)) {fprintf(stderr, __VA_ARGS__); exit(-1);}
 
 typedef int32_t  i32;
 typedef int16_t  i16;
@@ -49,6 +50,7 @@ typedef union {
 typedef struct Sprite_S {
     v2f_t pos;
     u32 tex_id;
+    double dist;
 } sprite_t;
 
 typedef struct Tile_s {
@@ -57,9 +59,7 @@ typedef struct Tile_s {
     u32 ceiling_id;
 } tile_t;
 
-typedef struct Sprite_Handle_S sprite_handle_t;
-
-extern struct Window_Data_S {
+typedef struct Window_Data_S {
     SDL_Window*   window;
     SDL_Renderer* renderer;
     SDL_Texture*  texture;
@@ -69,46 +69,57 @@ extern struct Window_Data_S {
     uint32_t window_flags;
     uint32_t render_flags;
     bool is_running;
-} CRSP_window_data;
+} window_data_t;
 
-extern union Screen_U {
+extern window_data_t CRSP_window_data;
+
+typedef union Screen_U {
     pixel_t pixels[MAX_WIDTH * MAX_HEIGHT];
     uint8_t bytes[MAX_WIDTH * MAX_HEIGHT * sizeof(pixel_t)];
-} CRSP_screen;
+} screen_t;
 
-extern struct Player_S {
+extern screen_t CRSP_screen;
+
+typedef struct Player_S {
     v2f_t pos;
     v2f_t dir;
     v2f_t plane;
-} CRSP_player;
+} player_t;
 
-extern struct Map_S {
+extern player_t CRSP_player;
+
+typedef struct Map_S {
     u32 width;
     u32 height;
-    tile_t** tiles;
-} CRSP_map;
+    tile_t *tiles;
+} map_t;
+extern map_t CRSP_map;
 
 extern u32 CRSP_texture_size;
 
-extern sprite_handle_t* CRSP_sprite_head;
+
+extern sprite_t* CRSP_sprites[MAX_SPRITES];
+//extern u32 CRSP_sprite_order[MAX_SPRITES];
+extern u32 CRSP_sprites_amount;
+
+v2f_t v2f_rotate(v2f_t v, double angle);
 
 void screen(u32 width, u32 height, char* name);
 void cleanup();
+void present();
+
 void render_map();
 void set_map(u32 width, u32 height, tile_t* tiles);
 void move_player(v2f_t new_pos, v2f_t new_dir);
 void set_fov(f64 new_fov);
-sprite_handle_t* add_sprite(sprite_t sprite_data);
-void remove_sprite(sprite_handle_t* sprite);
-void set_sprite(sprite_handle_t* handle, sprite_t sprite);
-sprite_t get_sprite(sprite_handle_t* handle);
+
+u32 add_sprite(sprite_t sprite_data);
+void remove_sprite(u32 index);
+void sort_sprites(sprite_t* sprites[MAX_SPRITES], uint32_t amount);
+
 void set_texture_size(u32 size);
 u32 add_texture(char* path);
-pixel_t** get_texture(u32 index);
-
-
-
-
-
-
+pixel_t* get_texture(u32 index);
+u32 add_dev_texture(u8 dev_index);
+void destroy_textures();
 #endif//CRSP_H
